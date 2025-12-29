@@ -17,173 +17,197 @@ import functools
 import pytest
 
 
-from git_remote_codecommit import Context, FormatError, ProfileNotFound, RegionNotFound, RegionNotAvailable, CredentialsNotFound
+from git_remote_codecommit import (
+    Context,
+    FormatError,
+    ProfileNotFound,
+    RegionNotFound,
+    RegionNotAvailable,
+    CredentialsNotFound,
+)
 from mock import Mock, patch
 
 
-DEFAULT_CREDS = botocore.credentials.Credentials('access_key', 'secret_key', 'token')
+DEFAULT_CREDS = botocore.credentials.Credentials("access_key", "secret_key", "token")
 mock_assume_role = Mock(spec=botocore.credentials.AssumeRoleProvider)
 providers = {
-    'assume-role': mock_assume_role,
+    "assume-role": mock_assume_role,
 }
 mock_resolver = Mock(spec=botocore.credentials.CredentialResolver)
 mock_resolver.get_provider = providers.get
 
 
 def get_available_regions(service, partition):
-  if (partition == 'aws'):
-    return ['ap-northeast-1', 'ap-northeast-2', 'ap-south-1', 'ap-southeast-1', 'ap-southeast-2', 'ca-central-1', 'us-west-2']
-  else:
-    return ['us-gov-west-1', 'us-gov-east-1']
+    if partition == "aws":
+        return [
+            "ap-northeast-1",
+            "ap-northeast-2",
+            "ap-south-1",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "ca-central-1",
+            "us-west-2",
+        ]
+    else:
+        return ["us-gov-west-1", "us-gov-east-1"]
 
 
 def get_available_partitions():
-  return ['aws', 'aws-us-gov']
+    return ["aws", "aws-us-gov"]
 
 
-def mock_session(region = None, available_profiles = None, credentials = DEFAULT_CREDS, resolver = mock_resolver):
+def mock_session(
+    region=None,
+    available_profiles=None,
+    credentials=DEFAULT_CREDS,
+    resolver=mock_resolver,
+):
 
-  def decorator(func):
-    session = Mock()
-    session.get_config_variable.return_value = region
-    session.available_profiles = available_profiles
-    session.get_credentials.return_value = credentials
-    session.get_available_partitions.return_value = get_available_partitions()
-    session.get_available_regions.side_effect = get_available_regions
-    session.get_component.return_value = resolver
+    def decorator(func):
+        session = Mock()
+        session.get_config_variable.return_value = region
+        session.available_profiles = available_profiles
+        session.get_credentials.return_value = credentials
+        session.get_available_partitions.return_value = get_available_partitions()
+        session.get_available_regions.side_effect = get_available_regions
+        session.get_component.return_value = resolver
+
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            with patch("botocore.session.Session", Mock(return_value=session)):
+                func(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
 
 
-    @functools.wraps(func)
-    def wrapped(*args, **kwargs):
-      with patch('botocore.session.Session', Mock(return_value = session)):
-        with patch('awscli.plugin.load_plugins', Mock()):
-          func(*args, **kwargs)
-
-    return wrapped
-
-  return decorator
-
-
-@mock_session(region = 'us-west-2')
+@mock_session(region="us-west-2")
 def test_without_profile():
-  context = Context.from_url('codecommit://test_repo')
-  assert 'test_repo' == context.repository
-  assert 'v1' == context.version
-  assert 'us-west-2' == context.region
-  assert DEFAULT_CREDS == context.credentials
+    context = Context.from_url("codecommit://test_repo")
+    assert "test_repo" == context.repository
+    assert "v1" == context.version
+    assert "us-west-2" == context.region
+    assert DEFAULT_CREDS == context.credentials
 
 
-@mock_session(region = 'zz-west-2')
+@mock_session(region="zz-west-2")
 def test_with_invalid_region():
-  with pytest.raises(RegionNotAvailable):
-    Context.from_url('codecommit://test_repo')
+    with pytest.raises(RegionNotAvailable):
+        Context.from_url("codecommit://test_repo")
 
 
-@mock_session(region = 'us-west-2', available_profiles = ['profile'])
+@mock_session(region="us-west-2", available_profiles=["profile"])
 def test_with_profile():
-  context = Context.from_url('codecommit://profile@test_repo')
-  assert 'test_repo' == context.repository
-  assert 'v1' == context.version
-  assert 'us-west-2' == context.region
-  assert DEFAULT_CREDS == context.credentials
+    context = Context.from_url("codecommit://profile@test_repo")
+    assert "test_repo" == context.repository
+    assert "v1" == context.version
+    assert "us-west-2" == context.region
+    assert DEFAULT_CREDS == context.credentials
 
 
-@mock_session(region = 'us-west-2', available_profiles = ['profile', 'profile2', 'profile3', 'profile3'])
+@mock_session(
+    region="us-west-2",
+    available_profiles=["profile", "profile2", "profile3", "profile3"],
+)
 def test_with_multiple_profiles():
-  context = Context.from_url('codecommit://profile@test_repo')
-  assert 'test_repo' == context.repository
-  assert 'v1' == context.version
-  assert 'us-west-2' == context.region
-  assert DEFAULT_CREDS == context.credentials
+    context = Context.from_url("codecommit://profile@test_repo")
+    assert "test_repo" == context.repository
+    assert "v1" == context.version
+    assert "us-west-2" == context.region
+    assert DEFAULT_CREDS == context.credentials
 
 
 @mock_session()
 def test_with_region():
-  context = Context.from_url('ca-central-1://test_repo')
-  assert 'test_repo' == context.repository
-  assert 'v1' == context.version
-  assert 'ca-central-1' == context.region
-  assert DEFAULT_CREDS == context.credentials
+    context = Context.from_url("ca-central-1://test_repo")
+    assert "test_repo" == context.repository
+    assert "v1" == context.version
+    assert "ca-central-1" == context.region
+    assert DEFAULT_CREDS == context.credentials
 
 
 @mock_session()
 def test_with_bad_region():
-  with pytest.raises(RegionNotAvailable):
-    Context.from_url('yy-central-1://test_repo')
+    with pytest.raises(RegionNotAvailable):
+        Context.from_url("yy-central-1://test_repo")
 
 
-@mock_session(region = 'us-west-2')
+@mock_session(region="us-west-2")
 def test_with_github():
-  with pytest.raises(FormatError):
-    Context.from_url('github://test_repo')
+    with pytest.raises(FormatError):
+        Context.from_url("github://test_repo")
 
 
-@mock_session(region = 'us-gov-east-1')
+@mock_session(region="us-gov-east-1")
 def test_with_gov_region():
-    context = Context.from_url('codecommit://test_repo')
-    assert 'test_repo' == context.repository
-    assert 'v1' == context.version
-    assert 'us-gov-east-1' == context.region
+    context = Context.from_url("codecommit://test_repo")
+    assert "test_repo" == context.repository
+    assert "v1" == context.version
+    assert "us-gov-east-1" == context.region
     assert DEFAULT_CREDS == context.credentials
 
 
-@mock_session(available_profiles = ['profile'])
+@mock_session(available_profiles=["profile"])
 def test_with_different_partition():
-    context = Context.from_url('us-gov-west-1://profile@repo')
-    assert 'repo' == context.repository
-    assert 'v1' == context.version
-    assert 'us-gov-west-1' == context.region
+    context = Context.from_url("us-gov-west-1://profile@repo")
+    assert "repo" == context.repository
+    assert "v1" == context.version
+    assert "us-gov-west-1" == context.region
     assert DEFAULT_CREDS == context.credentials
 
 
-@mock_session(available_profiles = ['profile'])
+@mock_session(available_profiles=["profile"])
 def test_with_profile_and_region():
-  context = Context.from_url('ca-central-1://profile@test_repo')
-  assert 'test_repo' == context.repository
-  assert 'v1' == context.version
-  assert 'ca-central-1' == context.region
-  assert DEFAULT_CREDS == context.credentials
+    context = Context.from_url("ca-central-1://profile@test_repo")
+    assert "test_repo" == context.repository
+    assert "v1" == context.version
+    assert "ca-central-1" == context.region
+    assert DEFAULT_CREDS == context.credentials
 
 
 def test_with_malformed_url():
-  malformed_urls = (
-      None,
-      '',
-      'boom',
-      'codecommit:/test_repo',    # missing a slash
-      'codecommit//test_repo',    # missing colon
-      '://test_repo',             # missing protocol
-      'codecommit://',            # missing repository
-      'codecommit:://test_repo',  # extra colon
-      'codecommit:///test_repo',  # extra slash
-  )
+    malformed_urls = (
+        None,
+        "",
+        "boom",
+        "codecommit:/test_repo",  # missing a slash
+        "codecommit//test_repo",  # missing colon
+        "://test_repo",  # missing protocol
+        "codecommit://",  # missing repository
+        "codecommit:://test_repo",  # extra colon
+        "codecommit:///test_repo",  # extra slash
+    )
 
-  for url in malformed_urls:
-    with pytest.raises(FormatError):
-      Context.from_url(url)
+    for url in malformed_urls:
+        with pytest.raises(FormatError):
+            Context.from_url(url)
 
 
-@mock_session(available_profiles = [])
+@mock_session(available_profiles=[])
 def test_with_nonexistant_profile():
-  with pytest.raises(ProfileNotFound):
-    Context.from_url('codecommit://missing_profile@test_repo')
+    with pytest.raises(ProfileNotFound):
+        Context.from_url("codecommit://missing_profile@test_repo")
 
 
-@mock_session(region = None)
+@mock_session(region=None)
 def test_with_unset_region():
-  with pytest.raises(RegionNotFound):
-    Context.from_url('codecommit://test_repo')
+    with pytest.raises(RegionNotFound):
+        Context.from_url("codecommit://test_repo")
 
 
-@mock_session(region = 'us-west-2', credentials = None)
+@mock_session(region="us-west-2", credentials=None)
 def test_without_credentials():
-  with pytest.raises(CredentialsNotFound):
-    Context.from_url('codecommit://test_repo')
+    with pytest.raises(CredentialsNotFound):
+        Context.from_url("codecommit://test_repo")
 
 
-@mock_session(available_profiles = ['profile'])
+@mock_session(available_profiles=["profile"])
 def test_with_assume_role_provider():
-  context = Context.from_url('ca-central-1://profile@test_repo')
-  context.session.get_component.assert_called_with('credential_provider')
-  assert type(mock_assume_role.cache), botocore.JSONFileCache
+    context = Context.from_url("ca-central-1://profile@test_repo")
 
+    context.session.get_component.assert_called_with("credential_provider")
+
+    assume_role = context.session.get_component.return_value.get_provider("assume-role")
+
+    assert isinstance(assume_role.cache, botocore.credentials.JSONFileCache)

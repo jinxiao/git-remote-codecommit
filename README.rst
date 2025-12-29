@@ -26,10 +26,10 @@ CodeCommit <https://aws.amazon.com/codecommit/>`__. This package extends `git
 
 The *git-remote-codecommit* package works on Python versions:
 
-* 3.8.x
-* 3.9.x
-* 3.10.x
 * 3.11.x
+* 3.12.x
+* 3.13.x
+* 3.14.x
 
 Prerequisites
 =============

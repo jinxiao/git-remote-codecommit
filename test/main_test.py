@@ -19,69 +19,85 @@ import git_remote_codecommit
 from mock import Mock, patch
 
 try:
-  from StringIO import StringIO
+    from StringIO import StringIO
 except ImportError:
-  from io import StringIO
+    from io import StringIO
 
 
-@patch('sys.stdout', new_callable = StringIO)
-@patch('sys.stderr', new_callable = StringIO)
-@patch('subprocess.call')
-@patch('sys.exit', Mock(side_effect = KeyboardInterrupt('terminating')))
-def assert_main(subprocess_mock, stderr_mock, stdout_mock, stdout = '', stderr = '', git_call = None):
-  """
-  Stubs out components of the main method that are troublesome for our tests,
-  and asserts that its call matches these results.
-  """
+@patch("sys.stdout", new_callable=StringIO)
+@patch("sys.stderr", new_callable=StringIO)
+@patch("subprocess.call")
+@patch("sys.exit", Mock(side_effect=KeyboardInterrupt("terminating")))
+def assert_main(
+    subprocess_mock, stderr_mock, stdout_mock, stdout="", stderr="", git_call=None
+):
+    """
+    Stubs out components of the main method that are troublesome for our tests,
+    and asserts that its call matches these results.
+    """
 
-  def git_call_mock(args):
-    assert git_call == ' '.join(args)
+    def git_call_mock(args):
+        assert git_call == " ".join(args)
 
-  subprocess_mock.side_effect = git_call_mock
+    subprocess_mock.side_effect = git_call_mock
 
-  try:
-    git_remote_codecommit.main()
-  except KeyboardInterrupt:
-    pass  # we use keyboard interrupts to mock exit calls, so accept those
+    try:
+        git_remote_codecommit.main()
+    except KeyboardInterrupt:
+        pass  # we use keyboard interrupts to mock exit calls, so accept those
 
-  assert stdout == stdout_mock.getvalue()
-  assert stderr == stderr_mock.getvalue()
+    assert stdout == stdout_mock.getvalue()
+    assert stderr == stderr_mock.getvalue()
 
 
-@patch('git_remote_codecommit.Context.from_url', Mock())
-@patch('git_remote_codecommit.git_url', Mock(return_value = 'https://test_url@codecommit/v1/repos/test_repo'))
-@patch.object(sys, 'argv', ['git-remote-codecommit', 'clone', 'TestRepo'])
+@patch("git_remote_codecommit.Context.from_url", Mock())
+@patch(
+    "git_remote_codecommit.git_url",
+    Mock(return_value="https://test_url@codecommit/v1/repos/test_repo"),
+)
+@patch.object(sys, "argv", ["git-remote-codecommit", "clone", "TestRepo"])
 def test_main():
-  assert_main(git_call = 'git remote-http clone https://test_url@codecommit/v1/repos/test_repo')
+    assert_main(
+        git_call="git remote-http clone https://test_url@codecommit/v1/repos/test_repo"
+    )
 
 
-@patch.object(sys, 'argv', ['git-remote-codecommit'])
+@patch.object(sys, "argv", ["git-remote-codecommit"])
 def test_main_with_too_few_arguments():
-  assert_main(stderr = 'Too few arguments. This hook requires the git command and remote.\n')
+    assert_main(
+        stderr="Too few arguments. This hook requires the git command and remote.\n"
+    )
 
 
-@patch.object(sys, 'argv', ['git-remote-codecommit', 'arg1', 'arg2', 'arg3'])
+@patch.object(sys, "argv", ["git-remote-codecommit", "arg1", "arg2", "arg3"])
 def test_main_with_too_many_arguments():
-  assert_main(stderr = "Too many arguments. Hook only accepts the git command and remote, but argv was: 'git-remote-codecommit', 'arg1', 'arg2', 'arg3'\n")
+    assert_main(
+        stderr="Too many arguments. Hook only accepts the git command and remote, but argv was: 'git-remote-codecommit', 'arg1', 'arg2', 'arg3'\n"
+    )
 
 
-@patch.object(sys, 'argv', ['git-remote-codecommit', 'clone', 'TestRepo'])
+@patch.object(sys, "argv", ["git-remote-codecommit", "clone", "TestRepo"])
 def test_main_with_exceptions():
-  # We check for quite a few issues. In those cases we provide a nice stderr message.
+    # We check for quite a few issues. In those cases we provide a nice stderr message.
 
-  recognized_exceptions = (
-      git_remote_codecommit.FormatError,
-      git_remote_codecommit.ProfileNotFound,
-      git_remote_codecommit.RegionNotFound,
-      git_remote_codecommit.CredentialsNotFound,
-  )
+    recognized_exceptions = (
+        git_remote_codecommit.FormatError,
+        git_remote_codecommit.ProfileNotFound,
+        git_remote_codecommit.RegionNotFound,
+        git_remote_codecommit.CredentialsNotFound,
+    )
 
-  for exception_type in recognized_exceptions:
-    with patch('git_remote_codecommit.Context.from_url', Mock(side_effect = exception_type('boom with a %s' % exception_type))):
-      assert_main(stderr = 'boom with a %s\n' % exception_type)
+    for exception_type in recognized_exceptions:
+        with patch(
+            "git_remote_codecommit.Context.from_url",
+            Mock(side_effect=exception_type("boom with a %s" % exception_type)),
+        ):
+            assert_main(stderr="boom with a %s\n" % exception_type)
 
-  # .. however, if we encounter an error we don't expect the hook should still stacktrace.
+    # .. however, if we encounter an error we don't expect the hook should still stacktrace.
 
-  with patch('git_remote_codecommit.Context.from_url', Mock(side_effect = IOError('boom'))):
-    with pytest.raises(IOError):
-      assert_main()
+    with patch(
+        "git_remote_codecommit.Context.from_url", Mock(side_effect=IOError("boom"))
+    ):
+        with pytest.raises(IOError):
+            assert_main()

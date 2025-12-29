@@ -94,7 +94,7 @@ class Context(collections.namedtuple('Context', ['session', 'repository', 'versi
 
     url = urlparse(remote_url)
     event_handler = botocore.hooks.HierarchicalEmitter()
-    profile = 'default'
+    profile = os.getenv("AWS_PROFILE","default")
     repository = url.netloc
     if not url.scheme or not url.netloc:
       raise FormatError('The following URL is malformed: {}. A URL must be in one of the two following formats: codecommit://<profile>@<repository> or codecommit::<region>://<profile>@<repository>'.format(remote_url))
@@ -109,21 +109,6 @@ class Context(collections.namedtuple('Context', ['session', 'repository', 'versi
       session = botocore.session.Session(event_hooks = event_handler)
 
     session.get_component('credential_provider').get_provider('assume-role').cache = JSONFileCache()
-
-    try:
-      # when the aws cli is available support plugin authentication
-
-      import awscli.plugin
-
-      awscli.plugin.load_plugins(
-          session.full_config.get('plugins', {}),
-          event_hooks = event_handler,
-          include_builtins = False,
-      )
-
-      session.emit_first_non_none_response('session-initialized', session = session)
-    except ImportError:
-      pass
 
     available_regions = [region for partition in session.get_available_partitions() for region in session.get_available_regions('codecommit', partition)]
 
